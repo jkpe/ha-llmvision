@@ -137,7 +137,7 @@ variables:
 mode: single
 trigger:
   platform: state
-  entity_id: !input camera_entities
+  entity_id: !input doorbell_entities
   to: !input trigger_state
 
 condition:
