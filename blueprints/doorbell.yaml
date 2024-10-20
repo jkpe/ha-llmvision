@@ -1,5 +1,6 @@
 blueprint:
-  name: Camera Motion Summary (LLM Vision)
+  name: Camera Motion Summary (LLM Vision v1.2.1)
+  author: valentinfrlch
   description: Summarizes camera motion events and sends a notification to your phone
   domain: automation
   input:
@@ -26,7 +27,13 @@ blueprint:
     trigger_state:
       name: Trigger State
       description: The state the camera has to be in to trigger the automation
-      default: recording
+      default: on
+      selector:
+        text:
+          multiline: false
+    tap_navigate:
+      name: Tap Navigate
+      description: Relativ path to navigate to when pressing notification (e.g. /lovelace/cameras)
       selector:
         text:
           multiline: false
@@ -74,6 +81,15 @@ blueprint:
         number:
           min: 1
           max: 60
+    max_frames:
+      name: Max Frames
+      description: How many frames to analyze. Picks frames with the most movement.
+      default: 3
+      selector:
+        number:
+          min: 1
+          max: 10
+          step: 1
     target_width:
       name: Target Width
       description: Width in pixels to downscale (uses less tokens)
@@ -85,7 +101,7 @@ blueprint:
     detail:
       name: Detail
       description: Detail parameter (OpenAI only)
-      default: 'high'
+      default: 'low'
       selector:
         select:
           options:
@@ -111,12 +127,17 @@ blueprint:
 
 variables:
   cooldown: !input cooldown
+  label: "{{ trigger.payload_json.after.label|capitalize }}"
+  camera: '{{ trigger.entity_id.replace("camera.", "").replace("_", " ")|capitalize }}'
+  video_preview: "{{base_url}}/api/events/{{trigger.payload_json['after']['id']}}/clip.mp4"
+  image_preview: "{{base_url}}/api/events/{{trigger.payload_json['after']['id']}}/snapshot.jpg"
   tag: "{{trigger.entity_id + int(as_timestamp(now()))|string}}"
   group: "{{trigger.entity_id}}"
 
+mode: single
 trigger:
   platform: state
-  entity_id: !input doorbell_entities
+  entity_id: !input camera_entities
   to: !input trigger_state
 
 condition:
@@ -131,8 +152,8 @@ action:
     type: notify
     device_id: !input notify_device
     title:  "Motion detected"
-    message: '{{ trigger.entity_id.replace("camera.", "").replace("_", " ")|capitalize }}'
-    data:      
+    message: '{{camera}}'
+    data:
       image: "{{'/api/camera_proxy/' + trigger.entity_id}}"
       tag: "{{tag}}"
       group: "{{group}}"
@@ -145,7 +166,7 @@ action:
       model: !input model
       message: !input message
       image_entity: !input camera_entities
-      interval: !input interval
+      max_frames: !input max_frames
       duration: !input duration
       include_filename: true
       target_width: !input target_width
@@ -158,11 +179,13 @@ action:
     domain: mobile_app
     type: notify
     device_id: !input notify_device
-    title: '{{ trigger.entity_id.replace("camera.", "").replace("_", " ")|capitalize }} detected motion'
+    title: '{{ trigger.entity_id.replace("camera.", "").replace("_", " ")|capitalize }}'
     message: "{{ response.response_text }}"
     data:
       tag: "{{tag}}"
       group: "{{group}}"
       image: "{{'/api/camera_proxy/' + trigger.entity_id}}"
+      url: !input tap_navigate #iOS
+      clickAction: !input tap_navigate #Android
       push:
         interruption-level: passive
